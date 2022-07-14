@@ -92,7 +92,6 @@ fn main() -> anyhow::Result<()> {
         ServiceBuilder::new()
             .timeout(Duration::from_secs(30))
             .layer(FollowRedirectLayer::new())
-            .retry(RetryLimit::new(5))
             .service(
                 hyper::Client::builder()
                     .retry_canceled_requests(true)
@@ -240,6 +239,7 @@ where
     C::Future: Send,
 {
     let links = generate_urls_by_nm_id(&nm.nm_id, &nm.old_pics_count);
+    trace!("generated links: {:?}", links);
 
     let n = links.len();
     let nm_id = nm.nm_id;
