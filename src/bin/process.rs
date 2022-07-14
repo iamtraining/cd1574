@@ -12,7 +12,6 @@ use {
 
 use {
     cd1574 as q,
-    q::render::retry::RetryLimit,
     q::store::{models::Nomenclature, sqlx_queue, sqlx_queue::Queue},
     q::worker::pool::spawn,
 };
@@ -296,6 +295,7 @@ where
         Error = BoxError,
     >,
 {
+    trace!("do_request > {url}");
     let response = client
         .call(Request::head(url).body(http_body::Full::new(hyper::body::Bytes::new()))?)
         .await
@@ -378,7 +378,6 @@ async fn worker_test() {
         ServiceBuilder::new()
             .timeout(Duration::from_secs(5))
             .layer(FollowRedirectLayer::new())
-            .retry(RetryLimit::new(5))
             .service(
                 hyper::Client::builder()
                     .retry_canceled_requests(true)

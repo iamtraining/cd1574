@@ -58,3 +58,16 @@ with f as (
 )
 select f."done", t."total" from f
 cross join t
+
+--
+
+update public.shard_1 as n set
+    in_process = false,
+    is_finished = false,
+    retries = 0,
+    good_links = '',
+    new_pics_count = NULL
+from (
+    select * from public.shard_1
+) as c(nm_id)
+where c.nm_id = n.nm_id and c.new_pics_count = 0;

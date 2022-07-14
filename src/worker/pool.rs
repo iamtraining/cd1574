@@ -5,7 +5,7 @@ use tower::{BoxError, Service};
 pub fn spawn<G, T, F, R, C>(
     cap: usize,
     generator: G,
-    render: C,
+    cli: C,
 ) -> (flume::Sender<T>, flume::Receiver<R>)
 where
     G: Fn(T, C) -> F + Clone + Send + Sync + 'static,
@@ -29,10 +29,10 @@ where
             generator.clone(),
             work_rx.clone(),
             res_tx.clone(),
-            render.clone(),
+            cli.clone(),
         ));
     }
-    tokio::spawn(worker(generator, work_rx, res_tx, render));
+    tokio::spawn(worker(generator, work_rx, res_tx, cli));
 
     (work_tx, res_rx)
 }
