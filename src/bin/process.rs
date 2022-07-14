@@ -185,7 +185,7 @@ where
             match result {
                 Ok(res) => finished.push(res),
                 Err(e) => {
-                    println!("{e}");
+                    error!("process error: {e}");
                     errors.push(nm_id);
                 }
             }
@@ -263,7 +263,7 @@ where
     let mut result: Vec<String> = Vec::new();
     let mut indexes = Vec::new();
 
-    for (image_idx, res) in &rawr {
+    for (image_idx, res) in rawr {
         match res {
             Ok(true) => {
                 let bucket = nm_id / 10000 * 10000;
@@ -271,14 +271,15 @@ where
                     SIZES[0].0,
                     bucket,
                     &nm_id,
-                    (*image_idx + 1) as i16,
+                    (image_idx + 1) as i16,
                     JPG,
                 ));
-                indexes.push((*image_idx + 1) as i16);
+                indexes.push((image_idx + 1) as i16);
             }
             Ok(false) => (),
             Err(e) => {
-                error!("{e}")
+                error!("rawr error: {e}");
+                return (nm.nm_id, Err(e));
             }
         };
     }
