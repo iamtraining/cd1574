@@ -264,17 +264,23 @@ where
     let mut indexes = Vec::new();
 
     for (image_idx, res) in &rawr {
-        if let Ok(true) = res {
-            let bucket = nm_id / 10000 * 10000;
-            result.push(format_url(
-                SIZES[0].0,
-                bucket,
-                &nm_id,
-                (*image_idx + 1) as i16,
-                JPG,
-            ));
-            indexes.push((*image_idx + 1) as i16);
-        }
+        match res {
+            Ok(true) => {
+                let bucket = nm_id / 10000 * 10000;
+                result.push(format_url(
+                    SIZES[0].0,
+                    bucket,
+                    &nm_id,
+                    (*image_idx + 1) as i16,
+                    JPG,
+                ));
+                indexes.push((*image_idx + 1) as i16);
+            }
+            Ok(false) => (),
+            Err(e) => {
+                error!("{e}")
+            }
+        };
     }
 
     trace!("nm {} indexes {:?}", nm.nm_id, indexes);
@@ -398,3 +404,8 @@ async fn worker_test() {
     let res = worker_fn(nm, cli.clone()).await;
     println!("{:?}", res);
 }
+
+// 64023641  3
+// https://images.wbstatic.net/big/new/64020000/64023641-1.jpg
+// https://images.wbstatic.net/big/new/64020000/64023641-2.jpg
+// https://images.wbstatic.net/big/new/64020000/64023641-3.jpg
