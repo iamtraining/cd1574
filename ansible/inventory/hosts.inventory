@@ -1,0 +1,9 @@
+[hosts]
+server1 ansible_ssh_host=images-1.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server2 ansible_ssh_host=images-2.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server3 ansible_ssh_host=images-33.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server4 ansible_ssh_host=images-4.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server5 ansible_ssh_host=images-5.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server6 ansible_ssh_host=images-6.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+server7 ansible_ssh_host=images-7.miningfarm.vm.prod-ocp.cloud.3data ansible_ssh_user=content
+

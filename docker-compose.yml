@@ -1,0 +1,102 @@
+version: '3.8'
+services:
+  shard-1:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/1/.env
+  shard-2:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/2/.env
+  shard-3:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/3/.env
+  shard-4:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/4/.env
+  shard-5:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/5/.env
+  shard-6:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/6/.env
+  shard-7:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/7/.env
+  shard-8:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/8/.env
+  shard-9:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/9/.env
+  shard-10:
+    deploy:
+      mode: replicated
+      replicas: 0
+    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile.process
+    env_file:
+      - ./envs/10/.env
