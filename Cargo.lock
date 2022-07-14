@@ -129,6 +129,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 
 [[package]]
+name = "cd1574"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arc-swap",
+ "async-trait",
+ "atty",
+ "csv",
+ "flume",
+ "futures",
+ "http-body",
+ "hyper",
+ "hyper-rustls",
+ "hyper-staticfile",
+ "reqwest",
+ "routerify",
+ "routerify-json-response",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1450,37 +1481,6 @@ name = "siphasher"
 version = "0.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
-
-[[package]]
-name = "size-reviewer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arc-swap",
- "async-trait",
- "atty",
- "csv",
- "flume",
- "futures",
- "http-body",
- "hyper",
- "hyper-rustls",
- "hyper-staticfile",
- "reqwest",
- "routerify",
- "routerify-json-response",
- "serde",
- "serde_json",
- "serde_yaml",
- "sqlx",
- "thiserror",
- "tokio",
- "tokio-postgres",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
-]
 
 [[package]]
 name = "slab"

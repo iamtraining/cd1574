@@ -48,3 +48,13 @@ s.is_finished = true or
 (s.retries = 3 and s.error = '')
 
 --
+
+with f as (
+	select count(*) as "done" from public.shard_2 s 
+	where s.is_finished = true or s.retries = 3
+)
+, t as (
+	select count(*) as "total" from public.shard_2
+)
+select f."done", t."total" from f
+cross join t

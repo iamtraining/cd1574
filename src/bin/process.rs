@@ -11,10 +11,10 @@ use {
 };
 
 use {
+    cd1574 as q,
     q::render::retry::RetryLimit,
     q::store::{models::Nomenclature, sqlx_queue, sqlx_queue::Queue},
     q::worker::pool::spawn,
-    size_reviewer as q,
 };
 
 const JPG: &str = "jpg";
