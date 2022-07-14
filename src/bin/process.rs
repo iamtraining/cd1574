@@ -31,7 +31,7 @@ static SIZES: &[(&str, bool)] = &[
     ("big", false),
 ];
 
-const WORKERS: usize = 100;
+const WORKERS: usize = 20;
 const LOG_LEVEL: Level = Level::TRACE;
 
 const POSTGRES_DB: &str = "POSTGRES_DB";
@@ -187,15 +187,10 @@ where
             match result {
                 Ok(res) => finished.push(res),
                 Err(e) => {
-                    error!("{e}");
+                    println!("{e}");
                     errors.push(nm_id);
                 }
             }
-            // if !nm.sizes.is_empty() {
-            //     with.push((nm.nm_id, nm.sizes))
-            // } else {
-            //     without.push((nm.nm_id, nm.error))
-            // }
         }
 
         if !finished.is_empty() {
@@ -283,10 +278,14 @@ where
         }
     }
 
-    (
-        nm.nm_id,
-        Ok((nm.nm_id, get_pics_count(indexes), result.join(";"))),
-    )
+    trace!("nm {} indexes {:?}", nm.nm_id, indexes);
+
+    let new_pics_count = get_pics_count(indexes);
+    trace!("nm {} new_pics_count {:?}", nm.nm_id, new_pics_count);
+    let good_links = result.join(";");
+    trace!("nm {} good_links {:?}", nm.nm_id, good_links);
+
+    (nm.nm_id, Ok((nm.nm_id, new_pics_count, good_links)))
 }
 
 async fn do_request<C>(mut client: C, url: &str) -> anyhow::Result<bool>
@@ -302,13 +301,20 @@ where
         .await
         .map_err(|err| anyhow!("{err}: {url}"))?;
 
-    if response.status() == 200 {
-        return Ok(true);
-    };
-    if response.status() == 404 {
-        return Ok(false);
-    };
-    Ok(false)
+    match response.status() {
+        hyper::StatusCode::OK => {
+            trace!("{url} status_code::ok");
+            Ok(true)
+        }
+        hyper::StatusCode::NOT_FOUND => {
+            trace!("{url} status_code::not_found");
+            Ok(false)
+        }
+        _ => {
+            trace!("{url} status_code::отличается от ожидаемого");
+            return Err(anyhow!("{url} response.status {}", response.status()));
+        }
+    }
 }
 
 fn generate_urls_by_nm_id(nm_id: &i64, pics_count: &i16) -> Vec<String> {
@@ -350,4 +356,39 @@ fn test_pics_count() {
     let data = vec![1, 2, 4, 5, 6];
     let pics_count = get_pics_count(data);
     assert_eq!(2, pics_count)
+}
+
+#[tokio::test]
+async fn worker_test() {
+    let cli = {
+        let conn = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_native_roots()
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build();
+
+        ServiceBuilder::new()
+            .timeout(Duration::from_secs(5))
+            .layer(FollowRedirectLayer::new())
+            .retry(RetryLimit::new(5))
+            .service(
+                hyper::Client::builder()
+                    .retry_canceled_requests(true)
+                    .build(conn),
+            )
+    };
+
+    let nm = Nomenclature {
+        nm_id: 91249210,
+        old_pics_count: 10,
+        new_pics_count: None,
+        good_links: "".to_string(),
+        in_process: false,
+        is_finished: false,
+        retries: 0,
+    };
+
+    let res = worker_fn(nm, cli.clone()).await;
+    println!("{:?}", res);
 }

@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.57"
-tokio = { version = "1.18.2", features = ["rt-multi-thread", "parking_lot", "time", "signal"] }
+tokio = { version = "1.18.2", features = ["rt-multi-thread", "parking_lot", "time", "signal","rt", "macros"] }
 hyper = { version = "0.14.18", features = ["full"] }
 hyper-rustls = { version = "0.23.0", features = ["native-tokio", "http1", "http2", "tls12"], default-features = false }
 tower = { version = "0.4.12", features = ["retry", "timeout", "util"], default-features = false }
