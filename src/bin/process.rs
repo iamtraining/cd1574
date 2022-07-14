@@ -90,7 +90,7 @@ fn main() -> anyhow::Result<()> {
             .build();
 
         ServiceBuilder::new()
-            .timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(30))
             .layer(FollowRedirectLayer::new())
             .retry(RetryLimit::new(5))
             .service(
@@ -340,22 +340,6 @@ fn get_pics_count(mut data: Vec<i16>) -> i16 {
         return 0;
     }
     data.sort_unstable();
-    let mut latest: i32 = -1;
-    let mut new_pics_count = 0;
-    for (i, v) in data.into_iter().enumerate() {
-        if i as i32 - 1 == latest && v == new_pics_count + 1 {
-            latest = i as i32;
-            new_pics_count = v;
-        }
-    }
-    new_pics_count
-}
-
-fn new_get_pics_count(mut data: Vec<i16>) -> i16 {
-    if data.is_empty() {
-        return 0;
-    }
-    data.sort_unstable();
     let mut latest = -1;
     data.into_iter().enumerate().fold(0, |mut accum, (i, v)| {
         if i as i32 - 1 == latest && v == accum + 1 {
@@ -369,15 +353,15 @@ fn new_get_pics_count(mut data: Vec<i16>) -> i16 {
 #[test]
 fn test_pics_count() {
     let data = vec![1, 2, 3, 4, 5, 6];
-    let pics_count = new_get_pics_count(data);
+    let pics_count = get_pics_count(data);
     assert_eq!(6, pics_count);
 
     let data = vec![4, 5, 1, 3];
-    let pics_count = new_get_pics_count(data);
+    let pics_count = get_pics_count(data);
     assert_eq!(1, pics_count);
 
     let data = vec![7];
-    let pics_count = new_get_pics_count(data);
+    let pics_count = get_pics_count(data);
     assert_eq!(0, pics_count);
 }
 
