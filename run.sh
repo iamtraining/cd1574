@@ -7,7 +7,7 @@
 export POSTGRES_DB=content
 export POSTGRES_USER=content
 export POSTGRES_PASSWORD=1231
-export POSTGRES_HOST=images-2.miningfarm.vm.prod-ocp.cloud.3data
+export POSTGRES_HOST=images-33.miningfarm.vm.prod-ocp.cloud.3data
 export POSTGRES_PORT=5433
 
 

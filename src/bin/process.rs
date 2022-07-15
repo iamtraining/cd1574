@@ -1,19 +1,20 @@
 use std::{env::var, time::Duration};
 
+use flume::SendError;
+use futures::stream::FuturesUnordered;
+
 use {
     anyhow::anyhow,
     futures::prelude::*,
-    hyper::{Body, Request, Response},
+    reqwest::{Request, Response},
     tokio::{runtime::Builder, time::sleep},
-    tower::{BoxError, Service, ServiceBuilder},
-    tower_http::follow_redirect::FollowRedirectLayer,
+    tower::{service_fn, BoxError, Service, ServiceBuilder},
     tracing::{error, info, trace, Level},
 };
 
 use {
     cd1574 as q,
     q::store::{models::Nomenclature, sqlx_queue, sqlx_queue::Queue},
-    q::worker::pool::spawn,
 };
 
 const JPG: &str = "jpg";
@@ -81,21 +82,10 @@ fn main() -> anyhow::Result<()> {
     })?;
 
     let cli = {
-        let conn = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .build();
-
+        let svc = reqwest::Client::builder().build().unwrap();
         ServiceBuilder::new()
             .timeout(Duration::from_secs(30))
-            .layer(FollowRedirectLayer::new())
-            .service(
-                hyper::Client::builder()
-                    .retry_canceled_requests(true)
-                    .build(conn),
-            )
+            .service(service_fn(move |req| svc.execute(req)))
     };
 
     rt.spawn({
@@ -120,18 +110,11 @@ fn main() -> anyhow::Result<()> {
 
 async fn process<C>(shard: String, queue: impl Queue, client: C)
 where
-    C: Service<
-            Request<http_body::Full<hyper::body::Bytes>>,
-            Response = Response<Body>,
-            Error = BoxError,
-        > + Clone
-        + Send
-        + Sync
-        + 'static,
+    C: Service<Request, Response = Response, Error = BoxError> + Clone + Send + 'static,
     C::Future: Send,
 {
     loop {
-        let mut nms = match queue.pull(&shard, WORKERS as i64).await {
+        let nms = match queue.pull(&shard, WORKERS as i64).await {
             Ok(nms) => nms,
             Err(err) => {
                 error!("work>queue.pull: {err}");
@@ -139,6 +122,8 @@ where
                 Vec::new()
             }
         };
+
+        println!("{:?}", nms);
 
         if nms.is_empty() {
             trace!("[nms] is empty");
@@ -148,59 +133,44 @@ where
 
         trace!("{} had been fetched", nms.len());
 
-        unsafe {
-            if DEBUG_FLAG {
-                nms.iter_mut()
-                    .for_each(|nm| nm.good_links = "rawrxd".to_string());
-                info!("debug mode");
-                let finished: Vec<_> = nms
-                    .into_iter()
-                    .map(|nm| (nm.nm_id, 3, nm.good_links))
-                    .collect();
-                if !finished.is_empty() {
-                    info!("{} nomenclatures were finished", finished.len());
-                    if let Err(err) = queue.batch_finish_jobs(&shard, finished).await {
-                        error!("batch_fail_jobs {}", err);
+        let (finished_tx, finished_rx) = flume::bounded(3000);
+        let (failed_tx, failed_rx) = flume::bounded(3000);
+
+        stream::iter(nms)
+            .for_each_concurrent(WORKERS, |nm| async {
+                // println!("here");
+                let client = client.clone();
+                let (nm, result) = worker_fn(nm, client).await;
+                match result {
+                    Ok(res) => {
+                        if let Err(SendError(id)) = finished_tx.send_async(res).await {
+                            error!("sending error {:?}", id);
+                        };
+                    }
+                    Err(err) => {
+                        error!("run_worker>handle_nm[{nm}]: {err}");
+                        if let Err(SendError(nm)) = failed_tx.send_async(nm).await {
+                            error!("sending error {}", nm);
+                        };
                     }
                 };
-                continue;
-            }
-        }
+            })
+            .await;
+        drop(finished_tx);
+        drop(failed_tx);
 
-        let (tx, rx) = spawn(WORKERS, worker_fn, client.clone());
-
-        tokio::spawn(async move {
-            for nm in nms {
-                if let Err(err) = tx.send_async(nm).await {
-                    error!("error occured while trying to send in spawned pool channel {err}");
-                };
-            }
-        });
-
-        let mut finished = Vec::new();
-        let mut errors = Vec::new();
-
-        let mut stream = rx.into_stream();
-        while let Some((nm_id, result)) = stream.next().await {
-            match result {
-                Ok(res) => finished.push(res),
-                Err(e) => {
-                    error!("process error: {e}");
-                    errors.push(nm_id);
-                }
-            }
-        }
-
-        if !finished.is_empty() {
-            info!("{} nomenclatures were finished", finished.len());
-            if let Err(err) = queue.batch_finish_jobs(&shard, finished).await {
+        let finished_nms = finished_rx.into_iter().collect::<Vec<(i64, i16, String)>>();
+        if !finished_nms.is_empty() {
+            info!("{} nomenclatures were finished", finished_nms.len());
+            if let Err(err) = queue.batch_finish_jobs(&shard, finished_nms).await {
                 error!("batch_finish_jobs {}", err);
             }
         };
 
-        if !errors.is_empty() {
-            info!("{} nomenclatures were failed", errors.len());
-            if let Err(err) = queue.batch_fail_jobs(&shard, errors).await {
+        let failed_nms = failed_rx.into_iter().collect::<Vec<i64>>();
+        if !failed_nms.is_empty() {
+            info!("{} nomenclatures were failed", failed_nms.len());
+            if let Err(err) = queue.batch_fail_jobs(&shard, failed_nms).await {
                 error!("batch_fail_jobs {}", err);
             }
         };
@@ -228,46 +198,38 @@ fn init_tracing() {
 
 async fn worker_fn<C>(nm: Nomenclature, cli: C) -> (i64, anyhow::Result<(i64, i16, String)>)
 where
-    C: Service<
-            Request<http_body::Full<hyper::body::Bytes>>,
-            Response = Response<Body>,
-            Error = BoxError,
-        > + Clone
-        + Send
-        + 'static,
+    C: Service<Request, Response = Response, Error = BoxError> + Clone + Send + 'static,
     C::Future: Send,
 {
     let links = generate_urls_by_nm_id(&nm.nm_id, &nm.old_pics_count);
-    trace!("generated links: {:?}", links);
+    // trace!("generated links: {:?}", links);
 
     let n = links.len();
     let nm_id = nm.nm_id;
-    let statuses = stream::iter(links)
-        .enumerate()
-        .map(|(idx, link)| {
+
+    let mut futures: FuturesUnordered<_> = (0..n)
+        .map(|idx| {
             let client = cli.clone();
-            tokio::spawn(async move { (idx, do_request(client, &link).await) })
+            let future = do_request(idx, client, links[idx].clone());
+            tokio::spawn(future)
         })
-        .buffer_unordered(n);
+        .collect();
 
-    let rawr = statuses
-        .filter_map(|r| async move {
-            match r {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            }
-        })
-        .collect::<Vec<(usize, Result<bool, anyhow::Error>)>>()
-        .await;
-
-    let mut result: Vec<String> = Vec::new();
+    let mut res: Vec<String> = Vec::new();
     let mut indexes = Vec::new();
 
-    for (image_idx, res) in rawr {
-        match res {
+    while let Some(join_result) = futures.next().await {
+        let (image_idx, result) = match join_result {
+            Ok(r) => r,
+            Err(e) => {
+                error!("cant join to handle {e}");
+                continue;
+            }
+        };
+        match result {
             Ok(true) => {
                 let bucket = nm_id / 10000 * 10000;
-                result.push(format_url(
+                res.push(format_url(
                     SIZES[0].0,
                     bucket,
                     &nm_id,
@@ -279,47 +241,50 @@ where
             Ok(false) => (),
             Err(e) => {
                 error!("rawr error: {e}");
-                return (nm.nm_id, Err(e));
+                return (nm.nm_id, Err(anyhow!(e.to_string())));
             }
         };
     }
 
-    trace!("nm {} indexes {:?}", nm.nm_id, indexes);
+    // println!("worker_fn 1");
+
+    // trace!("nm {} indexes {:?}", nm.nm_id, indexes);
 
     let new_pics_count = get_pics_count(indexes);
-    trace!("nm {} new_pics_count {:?}", nm.nm_id, new_pics_count);
-    let good_links = result.join(";");
-    trace!("nm {} good_links {:?}", nm.nm_id, good_links);
+    // trace!("nm {} new_pics_count {:?}", nm.nm_id, new_pics_count);
+    let good_links = res.join(";");
+    // trace!("nm {} good_links {:?}", nm.nm_id, good_links);
 
     (nm.nm_id, Ok((nm.nm_id, new_pics_count, good_links)))
 }
 
-async fn do_request<C>(mut client: C, url: &str) -> anyhow::Result<bool>
+async fn do_request<C>(pic_idx: usize, mut client: C, url: String) -> (usize, anyhow::Result<bool>)
 where
-    C: Service<
-        Request<http_body::Full<hyper::body::Bytes>>,
-        Response = Response<Body>,
-        Error = BoxError,
-    >,
+    C: Service<Request, Response = Response, Error = BoxError>,
 {
-    trace!("do_request > {url}");
-    let response = client
-        .call(Request::head(url).body(http_body::Full::new(hyper::body::Bytes::new()))?)
-        .await
-        .map_err(|err| anyhow!("{err}: {url}"))?;
+    // trace!("do_request started {url}");
+    let request = match reqwest::Client::new().get(&url).build() {
+        Ok(r) => r,
+        Err(e) => return (pic_idx, Err(anyhow::anyhow!("{e}"))),
+    };
 
-    match response.status() {
+    let resp = match client.call(request).await {
+        Ok(r) => r,
+        Err(e) => return (pic_idx, Err(anyhow::anyhow!("url={url} - err={e}"))),
+    };
+
+    match resp.status() {
         hyper::StatusCode::OK => {
-            trace!("{url} status_code::ok");
-            Ok(true)
+            // trace!("do_request {url} status_code::ok");
+            (pic_idx, Ok(true))
         }
         hyper::StatusCode::NOT_FOUND => {
-            trace!("{url} status_code::not_found");
-            Ok(false)
+            // trace!("do_request {url} status_code::not_found");
+            (pic_idx, Ok(false))
         }
         _ => {
-            trace!("{url} status_code::отличается от ожидаемого");
-            return Err(anyhow!("{url} response.status {}", response.status()));
+            // trace!("do_request {url} status_code::отличается от ожидаемого");
+            return (pic_idx, Err(anyhow!("{url} response.status")));
         }
     }
 }
@@ -375,21 +340,10 @@ fn test_pics_count() {
 #[tokio::test]
 async fn worker_test() {
     let cli = {
-        let conn = hyper_rustls::HttpsConnectorBuilder::new()
-            .with_native_roots()
-            .https_or_http()
-            .enable_http1()
-            .enable_http2()
-            .build();
-
+        let svc = reqwest::Client::builder().build().unwrap();
         ServiceBuilder::new()
-            .timeout(Duration::from_secs(5))
-            .layer(FollowRedirectLayer::new())
-            .service(
-                hyper::Client::builder()
-                    .retry_canceled_requests(true)
-                    .build(conn),
-            )
+            .timeout(Duration::from_secs(30))
+            .service(service_fn(move |req| svc.execute(req)))
     };
 
     let nm = Nomenclature {
