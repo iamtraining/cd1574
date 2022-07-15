@@ -123,7 +123,7 @@ where
             }
         };
 
-        println!("{:?}", nms);
+        // println!("{:?}", nms);
 
         if nms.is_empty() {
             trace!("[nms] is empty");
@@ -202,7 +202,7 @@ where
     C::Future: Send,
 {
     let links = generate_urls_by_nm_id(&nm.nm_id, &nm.old_pics_count);
-    // trace!("generated links: {:?}", links);
+    trace!("generated links: {:?}", links);
 
     let n = links.len();
     let nm_id = nm.nm_id;
@@ -248,12 +248,12 @@ where
 
     // println!("worker_fn 1");
 
-    // trace!("nm {} indexes {:?}", nm.nm_id, indexes);
+    trace!("nm {} indexes {:?}", nm.nm_id, indexes);
 
     let new_pics_count = get_pics_count(indexes);
-    // trace!("nm {} new_pics_count {:?}", nm.nm_id, new_pics_count);
+    trace!("nm {} new_pics_count {:?}", nm.nm_id, new_pics_count);
     let good_links = res.join(";");
-    // trace!("nm {} good_links {:?}", nm.nm_id, good_links);
+    trace!("nm {} good_links {:?}", nm.nm_id, good_links);
 
     (nm.nm_id, Ok((nm.nm_id, new_pics_count, good_links)))
 }
@@ -263,7 +263,11 @@ where
     C: Service<Request, Response = Response, Error = BoxError>,
 {
     // trace!("do_request started {url}");
-    let request = match reqwest::Client::new().get(&url).build() {
+    let request = match reqwest::Client::new()
+        .get(&url)
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+    {
         Ok(r) => r,
         Err(e) => return (pic_idx, Err(anyhow::anyhow!("{e}"))),
     };
@@ -275,15 +279,15 @@ where
 
     match resp.status() {
         hyper::StatusCode::OK => {
-            // trace!("do_request {url} status_code::ok");
+            trace!("do_request {url} status_code::ok");
             (pic_idx, Ok(true))
         }
         hyper::StatusCode::NOT_FOUND => {
-            // trace!("do_request {url} status_code::not_found");
+            trace!("do_request {url} status_code::not_found");
             (pic_idx, Ok(false))
         }
         _ => {
-            // trace!("do_request {url} status_code::отличается от ожидаемого");
+            trace!("do_request {url} status_code::отличается от ожидаемого");
             return (pic_idx, Err(anyhow!("{url} response.status")));
         }
     }
